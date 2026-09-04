@@ -3,7 +3,7 @@
 set -e
 
 if [[ -z "$1" ]]; then
-  echo "Usage: $0 'debug' | 'release' 'source_dir' 'out_dir' ['prefix']"
+  echo "Usage: $0 'debug' | 'release' 'source_dir' 'out_dir' ['prefix'] ['macos-only']"
   exit 0
 fi
 
@@ -11,6 +11,7 @@ MODE="$1"
 SOURCE_DIR="$(realpath "$2")"
 OUT_DIR="$(realpath "$3")"
 PREFIX="${4:-""}"
+PLATFORM_SCOPE="${5:-"all"}"
 
 if [ -z "$PREFIX" ]; then
   FRAMEWORK_NAME="WebRTC"
@@ -58,7 +59,7 @@ COMMON_ARGS="
       treat_warnings_as_errors = true
       use_rtti = true"
 
-PLATFORMS=(
+APPLE_PLATFORMS=(
   "iOS-arm64-device:target_os=\"ios\" target_environment=\"device\" target_cpu=\"arm64\" ios_deployment_target=\"13.0\""
   "iOS-arm64-simulator:target_os=\"ios\" target_environment=\"simulator\" target_cpu=\"arm64\" ios_deployment_target=\"13.0\""
   "iOS-x64-simulator:target_os=\"ios\" target_environment=\"simulator\" target_cpu=\"x64\" ios_deployment_target=\"13.0\""
@@ -71,6 +72,15 @@ PLATFORMS=(
   "xrOS-arm64-device:target_os=\"ios\" target_environment=\"xrdevice\" target_cpu=\"arm64\" ios_deployment_target=\"26.0\""
   "xrOS-arm64-simulator:target_os=\"ios\" target_environment=\"xrsimulator\" target_cpu=\"arm64\" ios_deployment_target=\"26.0\""
 )
+
+if [[ "$PLATFORM_SCOPE" == "macos-only" ]]; then
+  PLATFORMS=(
+    "macOS-arm64:target_os=\"mac\" target_cpu=\"arm64\" mac_deployment_target=\"10.15\""
+    "macOS-x64:target_os=\"mac\" target_cpu=\"x64\" mac_deployment_target=\"10.15\""
+  )
+else
+  PLATFORMS=("${APPLE_PLATFORMS[@]}")
+fi
 
 cd "$SOURCE_DIR"
 
@@ -104,28 +114,30 @@ if [ -d "$OUT_DIR/macOS-x64/$FRAMEWORK_NAME.dSYM" ]; then
   lipo -create -output "$OUT_DIR/macOS-lib/$FRAMEWORK_NAME.dSYM/Contents/Resources/DWARF/$FRAMEWORK_NAME" "$OUT_DIR/macOS-arm64/$FRAMEWORK_NAME.dSYM/Contents/Resources/DWARF/$FRAMEWORK_NAME" "$OUT_DIR/macOS-x64/$FRAMEWORK_NAME.dSYM/Contents/Resources/DWARF/$FRAMEWORK_NAME"
 fi
 
-mkdir -p "$OUT_DIR/catalyst-lib"
-cp -R "$OUT_DIR/catalyst-arm64/$FRAMEWORK_NAME.framework" "$OUT_DIR/catalyst-lib/$FRAMEWORK_NAME.framework"
-lipo -create -output "$OUT_DIR/catalyst-lib/$FRAMEWORK_NAME.framework/$FRAMEWORK_NAME" "$OUT_DIR/catalyst-arm64/$FRAMEWORK_NAME.framework/$FRAMEWORK_NAME" "$OUT_DIR/catalyst-x64/$FRAMEWORK_NAME.framework/$FRAMEWORK_NAME"
-if [ -d "$OUT_DIR/catalyst-arm64/$FRAMEWORK_NAME.dSYM" ]; then
-  cp -R "$OUT_DIR/catalyst-arm64/$FRAMEWORK_NAME.dSYM" "$OUT_DIR/catalyst-lib/$FRAMEWORK_NAME.dSYM"
-  lipo -create -output "$OUT_DIR/catalyst-lib/$FRAMEWORK_NAME.dSYM/Contents/Resources/DWARF/$FRAMEWORK_NAME" "$OUT_DIR/catalyst-arm64/$FRAMEWORK_NAME.dSYM/Contents/Resources/DWARF/$FRAMEWORK_NAME" "$OUT_DIR/catalyst-x64/$FRAMEWORK_NAME.dSYM/Contents/Resources/DWARF/$FRAMEWORK_NAME"
-fi
+if [[ "$PLATFORM_SCOPE" != "macos-only" ]]; then
+  mkdir -p "$OUT_DIR/catalyst-lib"
+  cp -R "$OUT_DIR/catalyst-arm64/$FRAMEWORK_NAME.framework" "$OUT_DIR/catalyst-lib/$FRAMEWORK_NAME.framework"
+  lipo -create -output "$OUT_DIR/catalyst-lib/$FRAMEWORK_NAME.framework/$FRAMEWORK_NAME" "$OUT_DIR/catalyst-arm64/$FRAMEWORK_NAME.framework/$FRAMEWORK_NAME" "$OUT_DIR/catalyst-x64/$FRAMEWORK_NAME.framework/$FRAMEWORK_NAME"
+  if [ -d "$OUT_DIR/catalyst-arm64/$FRAMEWORK_NAME.dSYM" ]; then
+    cp -R "$OUT_DIR/catalyst-arm64/$FRAMEWORK_NAME.dSYM" "$OUT_DIR/catalyst-lib/$FRAMEWORK_NAME.dSYM"
+    lipo -create -output "$OUT_DIR/catalyst-lib/$FRAMEWORK_NAME.dSYM/Contents/Resources/DWARF/$FRAMEWORK_NAME" "$OUT_DIR/catalyst-arm64/$FRAMEWORK_NAME.dSYM/Contents/Resources/DWARF/$FRAMEWORK_NAME" "$OUT_DIR/catalyst-x64/$FRAMEWORK_NAME.dSYM/Contents/Resources/DWARF/$FRAMEWORK_NAME"
+  fi
 
-mkdir -p "$OUT_DIR/iOS-device-lib"
-cp -R "$OUT_DIR/iOS-arm64-device/$FRAMEWORK_NAME.framework" "$OUT_DIR/iOS-device-lib/$FRAMEWORK_NAME.framework"
-lipo -create -output "$OUT_DIR/iOS-device-lib/$FRAMEWORK_NAME.framework/$FRAMEWORK_NAME" "$OUT_DIR/iOS-arm64-device/$FRAMEWORK_NAME.framework/$FRAMEWORK_NAME"
-if [ -d "$OUT_DIR/iOS-arm64-device/$FRAMEWORK_NAME.dSYM" ]; then
-  cp -R "$OUT_DIR/iOS-arm64-device/$FRAMEWORK_NAME.dSYM" "$OUT_DIR/iOS-device-lib/$FRAMEWORK_NAME.dSYM"
-  lipo -create -output "$OUT_DIR/iOS-device-lib/$FRAMEWORK_NAME.dSYM/Contents/Resources/DWARF/$FRAMEWORK_NAME" "$OUT_DIR/iOS-arm64-device/$FRAMEWORK_NAME.dSYM/Contents/Resources/DWARF/$FRAMEWORK_NAME"
-fi
+  mkdir -p "$OUT_DIR/iOS-device-lib"
+  cp -R "$OUT_DIR/iOS-arm64-device/$FRAMEWORK_NAME.framework" "$OUT_DIR/iOS-device-lib/$FRAMEWORK_NAME.framework"
+  lipo -create -output "$OUT_DIR/iOS-device-lib/$FRAMEWORK_NAME.framework/$FRAMEWORK_NAME" "$OUT_DIR/iOS-arm64-device/$FRAMEWORK_NAME.framework/$FRAMEWORK_NAME"
+  if [ -d "$OUT_DIR/iOS-arm64-device/$FRAMEWORK_NAME.dSYM" ]; then
+    cp -R "$OUT_DIR/iOS-arm64-device/$FRAMEWORK_NAME.dSYM" "$OUT_DIR/iOS-device-lib/$FRAMEWORK_NAME.dSYM"
+    lipo -create -output "$OUT_DIR/iOS-device-lib/$FRAMEWORK_NAME.dSYM/Contents/Resources/DWARF/$FRAMEWORK_NAME" "$OUT_DIR/iOS-arm64-device/$FRAMEWORK_NAME.dSYM/Contents/Resources/DWARF/$FRAMEWORK_NAME"
+  fi
 
-mkdir -p "$OUT_DIR/iOS-simulator-lib"
-cp -R "$OUT_DIR/iOS-arm64-simulator/$FRAMEWORK_NAME.framework" "$OUT_DIR/iOS-simulator-lib/$FRAMEWORK_NAME.framework"
-lipo -create -output "$OUT_DIR/iOS-simulator-lib/$FRAMEWORK_NAME.framework/$FRAMEWORK_NAME" "$OUT_DIR/iOS-arm64-simulator/$FRAMEWORK_NAME.framework/$FRAMEWORK_NAME" "$OUT_DIR/iOS-x64-simulator/$FRAMEWORK_NAME.framework/$FRAMEWORK_NAME"
-if [ -d "$OUT_DIR/iOS-arm64-simulator/$FRAMEWORK_NAME.dSYM" ]; then
-  cp -R "$OUT_DIR/iOS-arm64-simulator/$FRAMEWORK_NAME.dSYM" "$OUT_DIR/iOS-simulator-lib/$FRAMEWORK_NAME.dSYM"
-  lipo -create -output "$OUT_DIR/iOS-simulator-lib/$FRAMEWORK_NAME.dSYM/Contents/Resources/DWARF/$FRAMEWORK_NAME" "$OUT_DIR/iOS-arm64-simulator/$FRAMEWORK_NAME.dSYM/Contents/Resources/DWARF/$FRAMEWORK_NAME" "$OUT_DIR/iOS-x64-simulator/$FRAMEWORK_NAME.dSYM/Contents/Resources/DWARF/$FRAMEWORK_NAME"
+  mkdir -p "$OUT_DIR/iOS-simulator-lib"
+  cp -R "$OUT_DIR/iOS-arm64-simulator/$FRAMEWORK_NAME.framework" "$OUT_DIR/iOS-simulator-lib/$FRAMEWORK_NAME.framework"
+  lipo -create -output "$OUT_DIR/iOS-simulator-lib/$FRAMEWORK_NAME.framework/$FRAMEWORK_NAME" "$OUT_DIR/iOS-arm64-simulator/$FRAMEWORK_NAME.framework/$FRAMEWORK_NAME" "$OUT_DIR/iOS-x64-simulator/$FRAMEWORK_NAME.framework/$FRAMEWORK_NAME"
+  if [ -d "$OUT_DIR/iOS-arm64-simulator/$FRAMEWORK_NAME.dSYM" ]; then
+    cp -R "$OUT_DIR/iOS-arm64-simulator/$FRAMEWORK_NAME.dSYM" "$OUT_DIR/iOS-simulator-lib/$FRAMEWORK_NAME.dSYM"
+    lipo -create -output "$OUT_DIR/iOS-simulator-lib/$FRAMEWORK_NAME.dSYM/Contents/Resources/DWARF/$FRAMEWORK_NAME" "$OUT_DIR/iOS-arm64-simulator/$FRAMEWORK_NAME.dSYM/Contents/Resources/DWARF/$FRAMEWORK_NAME" "$OUT_DIR/iOS-x64-simulator/$FRAMEWORK_NAME.dSYM/Contents/Resources/DWARF/$FRAMEWORK_NAME"
+  fi
 fi
 
 end_group
@@ -134,27 +146,31 @@ start_group "Creating XCFramework"
 
 XCFRAMEWORK_ARGS=(-create-xcframework)
 
-FRAMEWORK_PATHS=(
-  "$OUT_DIR/iOS-device-lib/$FRAMEWORK_NAME.framework"
-  "$OUT_DIR/iOS-simulator-lib/$FRAMEWORK_NAME.framework"
-  "$OUT_DIR/macOS-lib/$FRAMEWORK_NAME.framework"
-  "$OUT_DIR/catalyst-lib/$FRAMEWORK_NAME.framework"
-  "$OUT_DIR/tvOS-arm64-device/$FRAMEWORK_NAME.framework"
-  "$OUT_DIR/tvOS-arm64-simulator/$FRAMEWORK_NAME.framework"
-  "$OUT_DIR/xrOS-arm64-device/$FRAMEWORK_NAME.framework"
-  "$OUT_DIR/xrOS-arm64-simulator/$FRAMEWORK_NAME.framework"
-)
-
-DSYM_PATHS=(
-  "$OUT_DIR/iOS-device-lib/$FRAMEWORK_NAME.dSYM"
-  "$OUT_DIR/iOS-simulator-lib/$FRAMEWORK_NAME.dSYM"
-  "$OUT_DIR/macOS-lib/$FRAMEWORK_NAME.dSYM"
-  "$OUT_DIR/catalyst-lib/$FRAMEWORK_NAME.dSYM"
-  "$OUT_DIR/tvOS-arm64-device/$FRAMEWORK_NAME.dSYM"
-  "$OUT_DIR/tvOS-arm64-simulator/$FRAMEWORK_NAME.dSYM"
-  "$OUT_DIR/xrOS-arm64-device/$FRAMEWORK_NAME.dSYM"
-  "$OUT_DIR/xrOS-arm64-simulator/$FRAMEWORK_NAME.dSYM"
-)
+if [[ "$PLATFORM_SCOPE" == "macos-only" ]]; then
+  FRAMEWORK_PATHS=("$OUT_DIR/macOS-lib/$FRAMEWORK_NAME.framework")
+  DSYM_PATHS=("$OUT_DIR/macOS-lib/$FRAMEWORK_NAME.dSYM")
+else
+  FRAMEWORK_PATHS=(
+    "$OUT_DIR/iOS-device-lib/$FRAMEWORK_NAME.framework"
+    "$OUT_DIR/iOS-simulator-lib/$FRAMEWORK_NAME.framework"
+    "$OUT_DIR/macOS-lib/$FRAMEWORK_NAME.framework"
+    "$OUT_DIR/catalyst-lib/$FRAMEWORK_NAME.framework"
+    "$OUT_DIR/tvOS-arm64-device/$FRAMEWORK_NAME.framework"
+    "$OUT_DIR/tvOS-arm64-simulator/$FRAMEWORK_NAME.framework"
+    "$OUT_DIR/xrOS-arm64-device/$FRAMEWORK_NAME.framework"
+    "$OUT_DIR/xrOS-arm64-simulator/$FRAMEWORK_NAME.framework"
+  )
+  DSYM_PATHS=(
+    "$OUT_DIR/iOS-device-lib/$FRAMEWORK_NAME.dSYM"
+    "$OUT_DIR/iOS-simulator-lib/$FRAMEWORK_NAME.dSYM"
+    "$OUT_DIR/macOS-lib/$FRAMEWORK_NAME.dSYM"
+    "$OUT_DIR/catalyst-lib/$FRAMEWORK_NAME.dSYM"
+    "$OUT_DIR/tvOS-arm64-device/$FRAMEWORK_NAME.dSYM"
+    "$OUT_DIR/tvOS-arm64-simulator/$FRAMEWORK_NAME.dSYM"
+    "$OUT_DIR/xrOS-arm64-device/$FRAMEWORK_NAME.dSYM"
+    "$OUT_DIR/xrOS-arm64-simulator/$FRAMEWORK_NAME.dSYM"
+  )
+fi
 
 for i in "${!FRAMEWORK_PATHS[@]}"; do
   XCFRAMEWORK_ARGS+=(-framework "${FRAMEWORK_PATHS[$i]}")
@@ -178,9 +194,11 @@ cd "$OUT_DIR/$FRAMEWORK_NAME.xcframework/macos-arm64_x86_64/$FRAMEWORK_NAME.fram
 mv "$FRAMEWORK_NAME" "Versions/A/$FRAMEWORK_NAME"
 ln -s "Versions/Current/$FRAMEWORK_NAME" "$FRAMEWORK_NAME"
 
-cd "$OUT_DIR/$FRAMEWORK_NAME.xcframework/ios-arm64_x86_64-maccatalyst/$FRAMEWORK_NAME.framework/"
-mv "$FRAMEWORK_NAME" "Versions/A/$FRAMEWORK_NAME"
-ln -s "Versions/Current/$FRAMEWORK_NAME" "$FRAMEWORK_NAME"
+if [[ "$PLATFORM_SCOPE" != "macos-only" ]]; then
+  cd "$OUT_DIR/$FRAMEWORK_NAME.xcframework/ios-arm64_x86_64-maccatalyst/$FRAMEWORK_NAME.framework/"
+  mv "$FRAMEWORK_NAME" "Versions/A/$FRAMEWORK_NAME"
+  ln -s "Versions/Current/$FRAMEWORK_NAME" "$FRAMEWORK_NAME"
+fi
 
 cd "$OUT_DIR"
 zip --symlinks -9 -r "$FRAMEWORK_NAME.xcframework.zip" "$FRAMEWORK_NAME.xcframework"

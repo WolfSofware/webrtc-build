@@ -41,7 +41,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        name: ${{ fromJSON(github.event_name == 'workflow_dispatch' && '["apple_prefixed"]' || '["apple", "apple_prefixed"]') }}
+        name: ${{ fromJSON(github.event_name == 'workflow_dispatch' && '["macos_prefixed"]' || '["apple", "apple_prefixed"]') }}
     runs-on: macos-26
     steps:
     - uses: actions/checkout@v5
