@@ -43,7 +43,7 @@ end_group() {
 }
 
 COMMON_ARGS="
-      enable_dsyms = $DEBUG
+      enable_dsyms = true
       enable_libaom = true
       enable_stripping = true
       ios_enable_code_signing = false
